@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/heap"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -31,10 +33,10 @@ func main() {
 	// First-come, first-serve scheduling
 	//FCFSSchedule(os.Stdout, "First-come, first-serve", processes)
 
-	SJFSchedule(os.Stdout, "Shortest-job-first", processes)
+	//SJFSchedule(os.Stdout, "Shortest-job-first", processes)
 
-	//SJFPrioritySchedule(os.Stdout, "Priority", processes)
-	//
+	SJFPrioritySchedule(os.Stdout, "Priority", processes)
+
 	//RRSchedule(os.Stdout, "Round-robin", processes)
 }
 
@@ -128,7 +130,115 @@ func FCFSSchedule(w io.Writer, title string, processes []Process) {
 	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
 }
 
-//func SJFPrioritySchedule(w io.Writer, title string, processes []Process) { }
+func SJFPrioritySchedule(w io.Writer, title string, processes []Process) {
+	var (
+		n                  = len(processes)
+		turnAroundTimes    = make([]int64, n)
+		waitingTimes       = make([]int64, n)
+		gantt              = make([]TimeSlice, 0)
+		lastCompletion     int64
+		schedule           = make([][]string, n)
+		insertedProcess    = 0
+		processesMapIdx    = make(map[int64]int)
+		totalBurstDuration int64
+		currentTime        = processes[0].ArrivalTime
+		minHeap            = &ProcessMinHeap{}
+		tempBurstDuration  = make([]int64, n)
+	)
+
+	sort.Slice(processes, func(i, j int) bool {
+		return processes[i].ArrivalTime < processes[j].ArrivalTime
+	})
+
+	heap.Init(minHeap)
+
+	for i, p := range processes {
+		processesMapIdx[p.ProcessID] = i
+		totalBurstDuration += p.BurstDuration
+		tempBurstDuration[i] = p.BurstDuration
+	}
+
+	for {
+		if insertedProcess < n {
+			for _, p := range processes {
+				if p.ArrivalTime != currentTime {
+					continue
+				}
+				insertedProcess++
+				heap.Push(minHeap, p)
+			}
+		}
+
+		pMinPriority := heap.Pop(minHeap).(Process)
+		pMinPriority.BurstDuration--
+		gantt = appendGantt(gantt, pMinPriority, currentTime)
+		currentTime++
+		gantt = setStop(gantt, currentTime)
+		if pMinPriority.BurstDuration > 0 {
+			heap.Push(minHeap, pMinPriority)
+		} else {
+			idx := processesMapIdx[pMinPriority.ProcessID]
+			turnAroundTimes[idx] = currentTime - pMinPriority.ArrivalTime
+			waitingTimes[idx] = turnAroundTimes[idx] - tempBurstDuration[idx]
+		}
+
+		if minHeap.Len() == 0 && insertedProcess == n {
+			break
+		}
+	}
+
+	for i := range processes {
+		completion := processes[i].BurstDuration + processes[i].ArrivalTime + waitingTimes[i]
+		if lastCompletion < completion {
+			lastCompletion = completion
+		}
+		schedule[i] = []string{
+			fmt.Sprint(processes[i].ProcessID),
+			fmt.Sprint(processes[i].Priority),
+			fmt.Sprint(processes[i].BurstDuration),
+			fmt.Sprint(processes[i].ArrivalTime),
+			fmt.Sprint(waitingTimes[i]),
+			fmt.Sprint(turnAroundTimes[i]),
+			fmt.Sprint(completion),
+		}
+	}
+
+	aveWait := float64(sum(waitingTimes)) / float64(n)
+	aveTurnaround := float64(sum(turnAroundTimes)) / float64(n)
+	aveThroughput := float64(n) / float64(lastCompletion)
+
+	outputTitle(w, title)
+	outputGantt(w, gantt)
+	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
+}
+
+// Implement Min Heap
+
+type ProcessMinHeap []Process
+
+func (h ProcessMinHeap) Len() int {
+	return len(h)
+}
+
+func (h ProcessMinHeap) Less(i, j int) bool {
+	return h[i].Priority < h[j].Priority
+}
+
+func (h ProcessMinHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *ProcessMinHeap) Push(x interface{}) {
+	*h = append(*h, x.(Process))
+}
+
+func (h *ProcessMinHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
 
 func SJFSchedule(w io.Writer, title string, processes []Process) {
 	var (
@@ -142,7 +252,7 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 		isCheck          = false
 		waitingTimes     = make([]int64, n)
 		lastCompletion   int64
-		schedule         = make([][]string, len(processes))
+		schedule         = make([][]string, n)
 	)
 
 	for i := range processes {
@@ -163,7 +273,7 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 			continue
 		}
 
-		gantt = appendGantt(gantt, processes, t, int64(curIdx))
+		gantt = appendGantt(gantt, processes[curIdx], t)
 
 		remainTime[curIdx]--
 
@@ -223,10 +333,10 @@ func findTurnAroundTimes(processes []Process, waitingTimes []int64) []int64 {
 	return turnAroundTimes
 }
 
-func appendGantt(gantt []TimeSlice, processes []Process, start int64, curIdx int64) []TimeSlice {
-	if len(gantt) == 0 || gantt[len(gantt)-1].PID != processes[curIdx].ProcessID {
+func appendGantt(gantt []TimeSlice, process Process, start int64) []TimeSlice {
+	if len(gantt) == 0 || gantt[len(gantt)-1].PID != process.ProcessID {
 		timeSlice := TimeSlice{
-			PID:   processes[curIdx].ProcessID,
+			PID:   process.ProcessID,
 			Start: start,
 		}
 		gantt = append(gantt, timeSlice)
