@@ -149,9 +149,7 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 		remainTime[i] = processes[i].BurstDuration
 	}
 
-	// Process until all processes gets completed
 	for numsOfCompletion < n {
-		// Find process with minimum remaining time among the processes that arrives till the current time
 		for i := range processes {
 			if processes[i].ArrivalTime <= t && remainTime[i] < minRemainTime && remainTime[i] > 0 {
 				minRemainTime = remainTime[i]
@@ -167,33 +165,26 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 
 		gantt = appendGantt(gantt, processes, t, int64(curIdx))
 
-		// Reduce remaining time by one
 		remainTime[curIdx]--
 
-		// Update minimum
 		minRemainTime = remainTime[curIdx]
 		if minRemainTime == 0 {
 			minRemainTime = int64(math.MaxInt64)
 		}
 
-		// If a process gets completely executed
 		if remainTime[curIdx] == 0 {
-			// Increment complete
 			numsOfCompletion++
 			isCheck = false
 
-			//Find finish time of current process
 			stop := t + 1
 			gantt = setStop(gantt, stop)
 
-			// Calculate waiting time
 			waitingTimes[curIdx] = stop - processes[curIdx].BurstDuration - processes[curIdx].ArrivalTime
 			if waitingTimes[curIdx] < 0 {
 				waitingTimes[curIdx] = 0
 			}
 		}
 
-		// Increment time
 		t++
 	}
 
