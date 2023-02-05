@@ -126,6 +126,70 @@ func Test_loadProcesses(t *testing.T) {
 	}
 }
 
+func TestSJFPrioritySchedule(t *testing.T) {
+	t.Parallel()
+	type args struct {
+		processes []Process
+		title     string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantOut string
+	}{
+		{
+			name: "default",
+			args: args{
+				processes: []Process{
+					{
+						ProcessID:     1,
+						ArrivalTime:   0,
+						BurstDuration: 3,
+						Priority:      3,
+					},
+					{
+						ProcessID:     2,
+						ArrivalTime:   1,
+						BurstDuration: 4,
+						Priority:      2,
+					},
+					{
+						ProcessID:     3,
+						ArrivalTime:   2,
+						BurstDuration: 6,
+						Priority:      4,
+					},
+					{
+						ProcessID:     4,
+						ArrivalTime:   3,
+						BurstDuration: 4,
+						Priority:      6,
+					},
+					{
+						ProcessID:     5,
+						ArrivalTime:   5,
+						BurstDuration: 2,
+						Priority:      10,
+					},
+				},
+				title: "Priority",
+			},
+			wantOut: loadFixture(t, "sjfp_test.txt"),
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var w bytes.Buffer
+			SJFPrioritySchedule(&w, tt.args.title, tt.args.processes)
+			if got := w.String(); got != tt.wantOut {
+				t.Errorf("SJFPrioritySchedule() = %v, want %v", got, tt.wantOut)
+			}
+		})
+	}
+}
+
 func TestSJFSchedule(t *testing.T) {
 	t.Parallel()
 	type args struct {

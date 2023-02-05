@@ -212,7 +212,7 @@ func SJFPrioritySchedule(w io.Writer, title string, processes []Process) {
 	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
 }
 
-// Implement Min Heap
+// Implement min-heap
 
 type ProcessMinHeap []Process
 
@@ -239,6 +239,8 @@ func (h *ProcessMinHeap) Pop() interface{} {
 	*h = old[0 : n-1]
 	return x
 }
+
+// end min-heap
 
 func SJFSchedule(w io.Writer, title string, processes []Process) {
 	var (
