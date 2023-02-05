@@ -254,6 +254,64 @@ func TestSJFSchedule(t *testing.T) {
 	}
 }
 
+func TestRRSchedule(t *testing.T) {
+	t.Parallel()
+	type args struct {
+		processes []Process
+		title     string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantOut string
+	}{
+		{
+			name: "default",
+			args: args{
+				processes: []Process{
+					{
+						ProcessID:     1,
+						ArrivalTime:   0,
+						BurstDuration: 5,
+						Priority:      3,
+					},
+					{
+						ProcessID:     2,
+						ArrivalTime:   1,
+						BurstDuration: 4,
+						Priority:      1,
+					},
+					{
+						ProcessID:     3,
+						ArrivalTime:   2,
+						BurstDuration: 2,
+						Priority:      4,
+					},
+					{
+						ProcessID:     4,
+						ArrivalTime:   3,
+						BurstDuration: 1,
+						Priority:      2,
+					},
+				},
+				title: "Round-robin",
+			},
+			wantOut: loadFixture(t, "rrs_test.txt"),
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var w bytes.Buffer
+			RRSchedule(&w, tt.args.title, tt.args.processes)
+			if got := w.String(); got != tt.wantOut {
+				t.Errorf("RRSchedule() = %v, want %v", got, tt.wantOut)
+			}
+		})
+	}
+}
+
 func loadFixture(t *testing.T, p ...string) string {
 	b, err := os.ReadFile(path.Join(p...))
 	if err != nil {

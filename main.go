@@ -35,9 +35,9 @@ func main() {
 
 	//SJFSchedule(os.Stdout, "Shortest-job-first", processes)
 
-	SJFPrioritySchedule(os.Stdout, "Priority", processes)
+	//SJFPrioritySchedule(os.Stdout, "Priority", processes)
 
-	//RRSchedule(os.Stdout, "Round-robin", processes)
+	RRSchedule(os.Stdout, "Round-robin", processes)
 }
 
 func openProcessingFile(args ...string) (*os.File, func(), error) {
@@ -361,7 +361,145 @@ func sum(nums []int64) int64 {
 	return s
 }
 
-//func RRSchedule(w io.Writer, title string, processes []Process) { }
+func RRSchedule(w io.Writer, title string, processes []Process) {
+	var (
+		n                 = len(processes)
+		timeQuanta        = 2 // change by requirement
+		timer             int64
+		tempBurstDuration = make([]int64, n)
+		maxProcessIdx     int
+		flag              bool
+		completed         = make([]bool, n)
+		queue             = make([]int, n)
+		turnAroundTimes   = make([]int64, n)
+		waitingTimes      = make([]int64, n)
+		gantt             = make([]TimeSlice, 0)
+		lastCompletion    int64
+		schedule          = make([][]string, n)
+	)
+
+	if n == 0 {
+		return
+	}
+
+	for i := range processes {
+		tempBurstDuration[i] = processes[i].BurstDuration
+	}
+
+	for timer < processes[0].ArrivalTime {
+		timer++
+	}
+	queue[0] = 1
+
+	for {
+		flag = true
+		for _, burst := range tempBurstDuration {
+			if burst != 0 {
+				flag = false
+				break
+			}
+		}
+
+		if flag {
+			break
+		}
+
+		for i := 0; i < n && queue[i] != 0; i++ {
+			ctr := 0
+			for ctr < timeQuanta && tempBurstDuration[queue[0]-1] > 0 {
+				gantt = appendGantt(gantt, processes[queue[0]-1], timer)
+				tempBurstDuration[queue[0]-1]--
+				timer++
+				ctr++
+				queue, maxProcessIdx = checkNewArrival(timer, processes, maxProcessIdx, queue)
+			}
+			gantt = setStop(gantt, timer)
+
+			if tempBurstDuration[queue[0]-1] == 0 && !completed[queue[0]-1] {
+				turnAroundTimes[queue[0]-1] = timer
+				completed[queue[0]-1] = true
+			}
+
+			ide := true
+			if queue[n-1] == 0 {
+				for _, idx := range queue {
+					if idx != 0 && !completed[idx-1] {
+						ide = false
+					}
+				}
+			} else {
+				ide = false
+			}
+
+			if ide {
+				timer++
+				queue, maxProcessIdx = checkNewArrival(timer, processes, maxProcessIdx, queue)
+			}
+
+			for j := 0; j < n-1; j++ {
+				if queue[j+1] != 0 {
+					queue[j], queue[j+1] = queue[j+1], queue[j]
+				}
+			}
+		}
+	}
+
+	for i := 0; i < n; i++ {
+		turnAroundTimes[i] = turnAroundTimes[i] - processes[i].ArrivalTime
+		waitingTimes[i] = turnAroundTimes[i] - processes[i].BurstDuration
+	}
+
+	for i := range processes {
+		completion := processes[i].BurstDuration + processes[i].ArrivalTime + waitingTimes[i]
+		if lastCompletion < completion {
+			lastCompletion = completion
+		}
+		schedule[i] = []string{
+			fmt.Sprint(processes[i].ProcessID),
+			fmt.Sprint(processes[i].Priority),
+			fmt.Sprint(processes[i].BurstDuration),
+			fmt.Sprint(processes[i].ArrivalTime),
+			fmt.Sprint(waitingTimes[i]),
+			fmt.Sprint(turnAroundTimes[i]),
+			fmt.Sprint(completion),
+		}
+	}
+
+	aveWait := float64(sum(waitingTimes)) / float64(n)
+	aveTurnaround := float64(sum(turnAroundTimes)) / float64(n)
+	aveThroughput := float64(n) / float64(lastCompletion)
+
+	outputTitle(w, title)
+	outputGantt(w, gantt)
+	outputSchedule(w, schedule, aveWait, aveTurnaround, aveThroughput)
+}
+
+func checkNewArrival(timer int64, processes []Process, maxProcessIdx int, queue []int) ([]int, int) {
+	n := len(processes)
+	if timer <= processes[n-1].ArrivalTime {
+		var newArrival bool
+		for i := maxProcessIdx + 1; i < n; i++ {
+			if processes[i].ArrivalTime <= timer && maxProcessIdx < i {
+				maxProcessIdx = i
+				newArrival = true
+			}
+		}
+
+		if newArrival {
+			zeroIdx := -1
+			for i := range queue {
+				if queue[i] == 0 {
+					zeroIdx = i
+					break
+				}
+			}
+			if zeroIdx > -1 {
+				queue[zeroIdx] = maxProcessIdx + 1
+			}
+		}
+	}
+	return queue, maxProcessIdx
+}
 
 //endregion
 
